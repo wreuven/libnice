@@ -3,6 +3,21 @@ project('libnice', 'c',
   meson_version : '>= 0.52',
   default_options : ['warning_level=1', 'buildtype=debugoptimized'])
 
+# wreuven@syna using Conan to supply missing OpenSSL
+
+conan_pkgs= {
+    'OpenSSL':'OpenSSL/1.1.1a@conan/stable',  # <- Must contain @, otherwise Conan will think it is a path
+    # you can add more ...
+}
+
+foreach pkg_name, conan_ref : conan_pkgs
+    module_path = meson.current_build_dir() / 'conan-cmake' / pkg_name
+    run_command('conan','install',conan_ref, '-if',module_path,
+        '-g','cmake_find_package', check: true)
+    crypto_dep = dependency(pkg_name, method: 'cmake', cmake_module_path: module_path)
+endforeach
+add_project_arguments('-DHAVE_OPENSSL', language: 'c')
+
 nice_version = meson.project_version()
 version_arr = nice_version.split('.')
 version_major = version_arr[0]
@@ -188,24 +203,6 @@ gthread_dep = dependency('gthread-2.0',
   fallback: ['glib', 'libgthread_dep'])
 
 # Cryto library
-opt_cryptolib = get_option('crypto-library')
-message('Crypto library requested: ' + opt_cryptolib)
-if opt_cryptolib != 'openssl'
-  crypto_dep = dependency('gnutls', version: gnutls_req, required: false)
-  cdata.set('HAVE_GNUTLS', crypto_dep.found())
-  if not crypto_dep.found() and opt_cryptolib == 'auto'
-    crypto_dep = dependency('openssl', required: false,
-      fallback: ['openssl', 'openssl_dep'])
-    cdata.set('HAVE_OPENSSL', crypto_dep.found())
-  endif
-else
-  crypto_dep = dependency('openssl', required: false)
-  cdata.set('HAVE_OPENSSL', crypto_dep.found())
-  if not crypto_dep.found() and openssl == 'auto'
-    crypto_dep = dependency('gnutls', version: gnutls_req, required: false)
-    cdata.set('HAVE_GNUTLS', crypto_dep.found())
-  endif
-endif
 
 if not crypto_dep.found() and opt_cryptolib != 'gnutls'
   # MSVC builds of OpenSSL does not generate pkg-config files,
